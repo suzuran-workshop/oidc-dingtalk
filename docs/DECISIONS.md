@@ -46,3 +46,24 @@
 - 为什么不选其他：环境变量数组方案（`ORG_1_*`、`ORG_2_*`）难以维护且不支持动态数量；TOML 功能相近但 JavaScript 生态支持不如 YAML 广泛。
 - 后果：路由从 `/oauth/<endpoint>` 变为 `/:orgId/<endpoint>`，向后不兼容；移除 `.env` 依赖，启动脚本不再需要 `--env-file` 参数。
 - 何时重新审视：如果未来需要热加载配置，或组织数量达到数百级别需要更高效的查找结构时。
+
+## ADR-005：升级为 OIDC Provider（id_token + discovery），签名选 HS256
+
+- 日期：2026-10-28
+- 状态：已采纳（v2.0.0）
+- 背景：下游 homura 全链转向 OIDC（客户端做 id_token 验签 + sub 交叉核对），IdP 需从纯
+  OAuth2 适配器升级为 OIDC Provider。项目仅自用，无向下兼容负担。
+- 考虑过的方案：RS256（JWK + 密钥轮换）、HS256（clientSecret 作 MAC）
+- 决策：HS256 签发 id_token（密钥即组织的 clientSecret），token 端点签发，claims 含
+  iss/sub/aud/iat/exp/name/picture；新增 `/.well-known/openid-configuration` discovery。
+- 为什么选这个：自用单部署下 RS256 的密钥生成/托管/轮换收益不存在，HS256 复用已有
+  clientSecret，客户端验签零额外配置；OIDC 规范允许 id_token 用 client secret 做 MAC。
+- 为什么不选其他：RS256 引入密钥对生命周期管理（生成、存档、轮换、jwks 端点缓存），
+  在单租户自用场景是纯负债。
+- 决策之二：不支持 nonce。钉钉的 code 直达消费方回调、本服务无状态（不跟踪 authCode），
+  token 端点只收到 code，无法把 authorize 时的 nonce 绑进 id_token。受众校验(aud=clientId)
+  + HS256 签名 + 全链 TLS 已覆盖自用场景的威胁模型。
+- 后果：token 端点在换 userAccessToken 后即执行身份解析链（users/me→unionid→getbyunionid），
+  id_token 的 sub 与 userinfo 同源；identity 解析失败时不阻塞 access_token 发放（仅缺
+  id_token），客户端验签自然失败即 fail-closed。package 更名 oidc-dingtalk，版本 2.0.0。
+- 何时重新审视：出现多消费方/公网开放、或需要密钥轮换审计时，升级 RS256 + jwks 端点。

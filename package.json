@@ -1,8 +1,8 @@
 {
-  "name": "oauth2-dingtalk",
-  "version": "1.0.0",
+  "name": "oidc-dingtalk",
+  "version": "2.0.0",
   "type": "module",
-  "description": "钉钉 OAuth2 适配器，将钉钉登录接口转为标准 OAuth2 端点",
+  "description": "钉钉 OIDC Provider，将钉钉登录接口转为标准 OIDC 端点（authorize/token+id_token/userinfo/discovery）",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
@@ -11,6 +11,7 @@
   "dependencies": {
     "@hono/node-server": "^1.19.0",
     "hono": "^4.10.0",
+    "jose": "^6.2.13",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
