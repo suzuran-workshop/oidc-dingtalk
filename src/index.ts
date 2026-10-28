@@ -28,6 +28,19 @@ for (const org of orgs) {
 
 // ---- 工具函数 ----
 
+/**
+ * issuer 基座 —— 反代（nginx TLS 卸载）后 c.req.url 的 scheme 是 http，
+ * 必须优先取 X-Forwarded-Proto，否则 discovery 的 issuer 与 id_token 的 iss
+ * 都会变成 http://，客户端（强制验签 iss=issuer）将验签失败。
+ */
+function issuerBase(c: Context, orgId: string): string {
+  const url = new URL(c.req.url);
+  const proto =
+    c.req.header("x-forwarded-proto")?.split(",")[0]?.trim() ||
+    url.protocol.replace(":", "");
+  return new URL(`${proto}://${url.host}/${orgId}`).toString().replace(/\/$/, "");
+}
+
 function getOrg(c: Context): OrgConfig | null {
   const orgId = c.req.param("orgId");
   if (!orgId) return null;
@@ -121,10 +134,7 @@ app.get("/:orgId/.well-known/openid-configuration", (c) => {
   const org = getOrg(c);
   if (!org) return c.text("organization not found", 404);
 
-  const base = new URL(c.req.url);
-  base.pathname = `/${org.id}`;
-  base.search = "";
-  const issuer = base.toString().replace(/\/$/, "");
+  const issuer = issuerBase(c, org.id);
 
   return c.json({
     issuer,
@@ -203,9 +213,7 @@ app.post("/:orgId/token", async (c) => {
     const identity = await resolveIdentity(org, data.accessToken);
     if (identity) {
       const now = Math.floor(Date.now() / 1000);
-      const issuer = new URL(c.req.url);
-      issuer.pathname = `/${org.id}`;
-      issuer.search = "";
+      const issuer = issuerBase(c, org.id);
       idToken = await new SignJWT({
         name: identity.name,
         picture: identity.picture,
